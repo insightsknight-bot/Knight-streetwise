@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Knight Admin | Add Product</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            background: #0D0D0D;
+            color: #F4F4F0;
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 24px 16px 80px;
+        }
+        .wrap { max-width: 480px; margin: 0 auto; }
+        h1 {
+            font-size: 22px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin: 24px 0 28px;
+        }
+        label {
+            display: block;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #A0A0A0;
+            margin-bottom: 8px;
+            margin-top: 20px;
+        }
+        input[type="text"], input[type="number"], input[type="password"] {
+            width: 100%;
+            background: #1A1A1A;
+            border: 1px solid #2C2C2C;
+            color: #F4F4F0;
+            padding: 14px;
+            font-size: 15px;
+            border-radius: 4px;
+        }
+        input[type="file"] {
+            width: 100%;
+            background: #1A1A1A;
+            border: 1px solid #2C2C2C;
+            color: #A0A0A0;
+            padding: 14px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        #preview {
+            margin-top: 12px;
+            max-width: 100%;
+            max-height: 240px;
+            border-radius: 4px;
+            display: none;
+        }
+        button {
+            width: 100%;
+            margin-top: 28px;
+            background: #E8E6DF;
+            color: #0D0D0D;
+            border: none;
+            padding: 16px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-size: 14px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:disabled { opacity: 0.5; }
+        #msg {
+            margin-top: 16px;
+            font-size: 14px;
+            padding: 12px;
+            border-radius: 4px;
+            display: none;
+        }
+        #msg.ok { background: rgba(0,150,80,0.15); color: #4ade80; display: block; }
+        #msg.err { background: rgba(196,30,58,0.15); color: #f87171; display: block; }
+        .list-link { color: #A0A0A0; font-size: 13px; text-decoration: underline; display: inline-block; margin-top: 32px; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <h1>Add a Product</h1>
+
+        <label for="password">Admin Password</label>
+        <input type="password" id="password" autocomplete="off">
+
+        <label for="name">Product Name</label>
+        <input type="text" id="name" placeholder="e.g. Resilience Heavyweight Hoodie">
+
+        <label for="subtitle">Color / Variant (optional)</label>
+        <input type="text" id="subtitle" placeholder="e.g. Washed Charcoal">
+
+        <label for="price">Price ($)</label>
+        <input type="number" id="price" placeholder="145">
+
+        <label for="badge">Badge (optional)</label>
+        <input type="text" id="badge" placeholder="e.g. New Drop">
+
+        <label for="photo">Product Photo</label>
+        <input type="file" id="photo" accept="image/*">
+        <img id="preview" alt="Preview">
+
+        <button id="submitBtn">Upload Product</button>
+        <div id="msg"></div>
+
+        <a class="list-link" href="/" target="_blank">&larr; View live site</a>
+    </div>
+
+    <script>
+        const photoInput = document.getElementById('photo');
+        const preview = document.getElementById('preview');
+        const submitBtn = document.getElementById('submitBtn');
+        const msg = document.getElementById('msg');
+        const passwordInput = document.getElementById('password');
+
+        // Remember password for this browser session so they don't retype every time
+        const savedPassword = sessionStorage.getItem('adminPassword');
+        if (savedPassword) passwordInput.value = savedPassword;
+
+        let compressedBase64 = null;
+
+        photoInput.addEventListener('change', () => {
+            const file = photoInput.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    // Resize so uploads stay small and fast
+                    const maxWidth = 1600;
+                    const scale = Math.min(1, maxWidth / img.width);
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width * scale;
+                    canvas.height = img.height * scale;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    compressedBase64 = canvas.toDataURL('image/jpeg', 0.82);
+                    preview.src = compressedBase64;
+                    preview.style.display = 'block';
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        submitBtn.addEventListener('click', async () => {
+            msg.style.display = 'none';
+
+            const password = passwordInput.value.trim();
+            const name = document.getElementById('name').value.trim();
+            const subtitle = document.getElementById('subtitle').value.trim();
+            const price = document.getElementById('price').value.trim();
+            const badge = document.getElementById('badge').value.trim();
+
+            if (!password || !name || !price || !compressedBase64) {
+                msg.textContent = 'Please fill in password, name, price, and choose a photo.';
+                msg.className = 'err';
+                msg.style.display = 'block';
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Uploading...';
+
+            try {
+                const res = await fetch('/api/upload', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        password, name, subtitle, price, badge,
+                        imageBase64: compressedBase64,
+                        filename: photoInput.files[0]?.name || 'photo.jpg'
+                    })
+                });
+                const data = await res.json();
+
+                if (!res.ok) {
+                    msg.textContent = data.error || 'Something went wrong.';
+                    msg.className = 'err';
+                } else {
+                    sessionStorage.setItem('adminPassword', password);
+                    msg.textContent = 'Product added! It is now live on your site.';
+                    msg.className = 'ok';
+                    document.getElementById('name').value = '';
+                    document.getElementById('subtitle').value = '';
+                    document.getElementById('price').value = '';
+                    document.getElementById('badge').value = '';
+                    photoInput.value = '';
+                    preview.style.display = 'none';
+                    compressedBase64 = null;
+                }
+            } catch (err) {
+                msg.textContent = 'Network error. Please try again.';
+                msg.className = 'err';
+            }
+
+            msg.style.display = 'block';
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Upload Product';
+        });
+    </script>
+</body>
+</html>
